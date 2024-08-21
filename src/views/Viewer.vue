@@ -676,6 +676,22 @@ export default {
 				handler = this.registeredHandlers[mime] ?? this.registeredHandlers[alias]
 			}
 
+			// TODO
+			// 1. Add initial state in lib/Listener/LoadViewerScript.php
+			//    * using provideInitialState()
+			//    * read instance config $alwaysShowViewer = $this->config->getSystemValue('always_show_viewer', false);
+			//    * Document the config in config.sample.php
+			// 2. Config module config.js
+			//    * Use loadState() and expose the config as object
+			//    * Use > const config = loadState(appName, 'config', [])
+			// 3. Import config module here
+			//    * Use down below
+
+			if (!handler /* && configModule.alwaysShowViewer */) {
+				console.log("Checking whether there's a default handler for alias '*/*'");
+				handler = this.registeredHandlers['*/*'];
+			}
+
 			// if we don't have a handler for this mime, abort
 			if (!handler) {
 				logger.error('The following file could not be displayed', { fileInfo })
@@ -947,11 +963,9 @@ export default {
 						if (nodes.some(node => !(node.isDavRessource && node.root?.startsWith('/files')))) {
 							return false
 						}
+						console.log("Thole was here");
 						// Faster to check if at least one node doesn't match the requirements
-						return !nodes.some(node => (
-							(node.permissions & Permission.READ) === 0
-							|| !this.Viewer.mimetypes.includes(node.mime)
-						))
+						return true
 					},
 					exec: filesActionHandler,
 				}))
