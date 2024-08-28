@@ -2,6 +2,8 @@
  * SPDX-FileCopyrightText: 2024 Nextcloud GmbH and Nextcloud contributors
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
+import configModule from '../models/config'
+
 import type { Node, View } from '@nextcloud/files'
 
 import { DefaultType, FileAction, Permission, registerFileAction } from '@nextcloud/files'
@@ -73,6 +75,11 @@ export function registerViewerAction() {
 			// Disable if not located in user root
 			if (nodes.some(node => !(node.isDavRessource && node.root?.startsWith('/files')))) {
 				return false
+			}
+
+			// Always enabled if configured so
+			if (configModule.alwaysShowViewer) {
+				return true
 			}
 
 			return nodes.every((node) =>
