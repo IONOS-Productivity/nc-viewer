@@ -192,6 +192,7 @@ import { canDownload } from '../utils/canDownload.ts'
 import { extractFilePaths, extractFilePathFromSource } from '../utils/fileUtils.ts'
 import { toggleEditor } from '../files_actions/viewerAction.ts'
 import cancelableRequest from '../utils/CancelableRequest.js'
+import configModule from '../models/config.ts'
 import Error from '../components/Error.vue'
 import fetchNode from '../services/FetchFile.ts'
 import File from '../models/file.js'
@@ -726,6 +727,11 @@ export default defineComponent({
 			// If no provided handler, or provided handler not found: try a supported handler with mime/mime-alias
 			if (!handler) {
 				handler = this.registeredHandlers[mime] ?? this.registeredHandlers[alias]
+			}
+
+			// fallback to default viewer if enabled
+			if (!handler && configModule.alwaysShowViewer) {
+				handler = this.registeredHandlers['*/*']
 			}
 
 			// if we don't have a handler for this mime, abort
