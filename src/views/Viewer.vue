@@ -204,6 +204,7 @@ import isMobile from '@nextcloud/vue/dist/Mixins/isMobile.js'
 import { extractFilePaths, sortCompare } from '../utils/fileUtils.ts'
 import canDownload from '../utils/canDownload.js'
 import cancelableRequest from '../utils/CancelableRequest.js'
+import configModule from '../models/config.ts'
 import Error from '../components/Error.vue'
 import File from '../models/file.js'
 import filesActionHandler from '../services/FilesActionHandler.js'
@@ -682,6 +683,11 @@ export default {
 				handler = this.registeredHandlers[mime] ?? this.registeredHandlers[alias]
 			}
 
+			// fallback to default viewer if enabled
+			if (!handler && configModule.alwaysShowViewer) {
+				handler = this.registeredHandlers['*/*']
+			}
+
 			// if we don't have a handler for this mime, abort
 			if (!handler) {
 				logger.error('The following file could not be displayed', { fileInfo })
@@ -953,6 +959,12 @@ export default {
 						if (nodes.some(node => !(node.isDavRessource && node.root?.startsWith('/files')))) {
 							return false
 						}
+
+						// Always enabled if configured so
+						if (configModule.alwaysShowViewer) {
+							return true
+						}
+
 						// Faster to check if at least one node doesn't match the requirements
 						return !nodes.some(node => (
 							(node.permissions & Permission.READ) === 0
