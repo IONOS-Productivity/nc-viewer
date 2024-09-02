@@ -348,6 +348,10 @@ export default {
 			return ['image/jpeg', 'image/png', 'image/webp'].includes(this.currentFile?.mime)
 		},
 
+		showsMimeImage() {
+			return !['image', 'video', 'audio'].includes(this.currentFile?.mime?.split('/')[0])
+		},
+
 		/**
 		 * Returns the path to the current opened file in the sidebar.
 		 *
@@ -410,6 +414,7 @@ export default {
 				'theme--light': this.theme === 'light',
 				'theme--default': this.theme === 'default',
 				'image--fullscreen': this.isImage && this.isFullscreenMode,
+				'mime-image': this.showsMimeImage,
 			}
 		},
 
@@ -1354,6 +1359,15 @@ export default {
 				top: 0;
 				bottom: 0;
 				height: 100%;
+			}
+		}
+	}
+
+	&.mime-image {
+		:deep(.modal-header) {
+			.modal-name {
+				// Hide file name, as it is shown in component
+				opacity: 0;
 			}
 		}
 	}
