@@ -759,8 +759,10 @@ export default defineComponent({
 			this.comparisonFile = null
 			this.updatePreviousNext()
 
+			// fallback to default viewer group if enabled
+			const groupFallback = configModule.alwaysShowViewer ? this.mimeGroups[configModule.defaultMimeType] : undefined
 			// check if part of a group, if so retrieve full files list
-			const group = this.mimeGroups[mime]
+			const group = this.mimeGroups[mime] ?? groupFallback
 			if (this.files && this.files.length > 0) {
 				logger.debug('A files list have been provided. No folder content will be fetched.')
 				// we won't sort files here, let's use the order the array has
@@ -842,7 +844,7 @@ export default defineComponent({
 		openFileFromList(fileInfo) {
 			// override mimetype if existing alias
 			const mime = fileInfo.mime
-			this.currentFile = new File(fileInfo, mime, this.components[mime])
+			this.currentFile = new File(fileInfo, mime, this.components[mime] || this.components[configModule.defaultMimeType])
 			this.changeSidebar()
 			this.updatePreviousNext()
 		},
