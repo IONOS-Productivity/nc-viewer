@@ -397,7 +397,11 @@ export default defineComponent({
 		},
 
 		modalTitle() {
-			return this.currentFile.basename
+			if (!configModule.alwaysShowViewer) {
+				return this.currentFile.basename
+			}
+
+			return this.currentFile?.modal?.name === 'Default' ? '' : this.currentFile.basename
 		},
 
 		showComparison() {
