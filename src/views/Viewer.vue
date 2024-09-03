@@ -754,7 +754,7 @@ export default {
 		openFileFromList(fileInfo) {
 			// override mimetype if existing alias
 			const mime = fileInfo.mime
-			this.currentFile = new File(fileInfo, mime, this.components[mime] || this.components['*/*'])
+			this.currentFile = new File(fileInfo, mime, this.components[mime] || this.components[configModule.defaultMimeType])
 			this.changeSidebar()
 			this.updatePreviousNext()
 		},
