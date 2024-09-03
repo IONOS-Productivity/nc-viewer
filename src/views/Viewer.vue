@@ -685,7 +685,7 @@ export default {
 
 			// fallback to default viewer if enabled
 			if (!handler && configModule.alwaysShowViewer) {
-				handler = this.registeredHandlers['*/*']
+				handler = this.registeredHandlers[configModule.defaultMimeType]
 			}
 
 			// if we don't have a handler for this mime, abort
