@@ -61,7 +61,7 @@
 		:inline-actions="canEdit ? 1 : 0"
 		:spread-navigation="true"
 		:style="{ width: isSidebarShown ? `${sidebarPosition}px` : null }"
-		:name="currentFile.basename"
+		:name="modalTitle"
 		:view="currentFile.modal"
 		class="viewer"
 		size="full"
@@ -409,6 +409,10 @@ export default defineComponent({
 				'theme--default': this.theme === 'default',
 				'image--fullscreen': this.isImage && this.isFullscreenMode,
 			}
+		},
+
+		modalTitle() {
+			return this.currentFile.basename
 		},
 
 		showComparison() {
