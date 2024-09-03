@@ -697,8 +697,10 @@ export default {
 			this.theme = handler.theme ?? 'dark'
 			this.handlerId = handler.id
 
+			// fallback to default viewer group if enabled
+			const groupFallback = configModule.alwaysShowViewer ? this.mimeGroups[configModule.defaultMimeType] : undefined
 			// check if part of a group, if so retrieve full files list
-			const group = this.mimeGroups[mime] ?? this.mimeGroups['*/*']
+			const group = this.mimeGroups[mime] ?? groupFallback
 			if (this.files && this.files.length > 0) {
 				logger.debug('A files list have been provided. No folder content will be fetched.')
 				// we won't sort files here, let's use the order the array has
