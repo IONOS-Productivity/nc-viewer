@@ -414,12 +414,15 @@ export default {
 				'theme--light': this.theme === 'light',
 				'theme--default': this.theme === 'default',
 				'image--fullscreen': this.isImage && this.isFullscreenMode,
-				'mime-image': this.showsMimeImage,
 			}
 		},
 
 		modalTitle() {
-			return this.currentFile.basename
+			if (!configModule.alwaysShowViewer) {
+				return this.currentFile.basename
+			}
+
+			return this.currentFile?.modal?.name === 'Default' ? '' : this.currentFile.basename
 		},
 
 		showComparison() {
@@ -1359,15 +1362,6 @@ export default {
 				top: 0;
 				bottom: 0;
 				height: 100%;
-			}
-		}
-	}
-
-	&.mime-image {
-		:deep(.modal-header) {
-			.modal-name {
-				// Hide file name, as it is shown in component
-				opacity: 0;
 			}
 		}
 	}
