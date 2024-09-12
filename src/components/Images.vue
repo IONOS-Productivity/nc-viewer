@@ -126,7 +126,7 @@ export default {
 			shiftX: 0,
 			shiftY: 0,
 			zoomRatio: 1,
-			fallback: false,
+			previewFailed: false,
 			livePhotoCanBePlayed: false,
 		}
 	},
@@ -191,7 +191,7 @@ export default {
 			}
 
 			// If loading the preview failed once, let's load the original file
-			if (this.fallback) {
+			if (this.previewFailed) {
 				return this.src
 			}
 
@@ -351,9 +351,9 @@ export default {
 
 		// Fallback to the original image if not already done
 		onFail() {
-			if (!this.fallback) {
+			if (!this.previewFailed) {
 				console.error(`Loading of file preview ${basename(this.src)} failed, falling back to original file`)
-				this.fallback = true
+				this.previewFailed = true
 			}
 		},
 		doneLoadingLivePhoto() {
