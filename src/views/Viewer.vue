@@ -972,6 +972,10 @@ export default {
 
 						// Always enabled if configured so
 						if (configModule.alwaysShowViewer) {
+							// disable for folders
+							if (nodes.some(node => node.type === 'folder')) {
+								return false
+							}
 							return true
 						}
 
