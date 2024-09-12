@@ -77,7 +77,8 @@ export function registerViewerAction() {
 
 			// Always enabled if configured so
 			if (configModule.alwaysShowViewer) {
-				return true
+				// disable for folders
+				return !nodes.some(node => node.type === 'folder')
 			}
 
 			return nodes.every((node) =>
