@@ -29,7 +29,8 @@
 			@close="onClose" />
 
 		<template v-else-if="data !== null">
-			<img v-if="!livePhotoCanBePlayed"
+			<Default v-if="originalFailed" :basename="basename" :mime="mime" />
+			<img v-else-if="!livePhotoCanBePlayed"
 				ref="image"
 				:alt="alt"
 				:class="{
@@ -39,7 +40,7 @@
 				}"
 				:src="data"
 				:style="imgStyle"
-				@error.capture.prevent.stop.once="onFail"
+				@error.capture.prevent.stop="onFail"
 				@load="updateImgSize"
 				@wheel="updateZoom"
 				@dblclick.prevent="onDblclick"
@@ -95,6 +96,7 @@ import { basename } from '@nextcloud/paths'
 import { translate } from '@nextcloud/l10n'
 import { NcLoadingIcon } from '@nextcloud/vue'
 
+import Default from './Default.vue'
 import ImageEditor from './ImageEditor.vue'
 import { findLivePhotoPeerFromFileId } from '../utils/livePhotoUtils'
 import { getDavPath } from '../utils/fileUtils'
@@ -105,6 +107,7 @@ export default {
 	name: 'Images',
 
 	components: {
+		Default,
 		ImageEditor,
 		PlayCircleOutline,
 		NcLoadingIcon,
@@ -127,6 +130,7 @@ export default {
 			shiftY: 0,
 			zoomRatio: 1,
 			previewFailed: false,
+			originalFailed: false,
 			livePhotoCanBePlayed: false,
 		}
 	},
@@ -351,9 +355,17 @@ export default {
 
 		// Fallback to the original image if not already done
 		onFail() {
+			if (this.originalFailed) {
+				// Loading the original image was already attempted, don't bother handling more errors
+				return
+			}
 			if (!this.previewFailed) {
-				console.error(`Loading of file preview ${basename(this.src)} failed, falling back to original file`)
 				this.previewFailed = true
+				console.error(`Loading of file preview ${basename(this.src)} failed, falling back to original file`)
+			} else {
+				this.originalFailed = true
+				console.error(`Loading of the original image ${basename(this.source)} failed too`)
+				this.doneLoading()
 			}
 		},
 		doneLoadingLivePhoto() {
