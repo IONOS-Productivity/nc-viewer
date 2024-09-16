@@ -52,7 +52,7 @@ img {
 	align-self: center;
 	justify-self: center;
 	margin-bottom: 16px;
-	width: 100%;
+	min-width: 100%;
 	height: 10em;
 }
 
