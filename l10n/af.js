@@ -19,13 +19,14 @@ OC.L10N.register(
     "Loading …" : "Laai …",
     "Reset" : "Herstel",
     "Cancel" : "Kanselleer",
-    "Continue" : "Gaan voort",
+    "Confirm" : "Bevestig",
     "Original" : "Oorspronklik",
     "Custom" : "Eie",
     "Value" : "Waarde",
     "Text" : "Teks",
     "Size" : "Grootte",
     "Position" : "Posisie",
-    "Quality" : "Kwaliteit"
+    "Quality" : "Kwaliteit",
+    "Menu" : "Kieslys"
 },
 "nplurals=2; plural=(n != 1);");
