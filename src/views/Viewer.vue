@@ -51,6 +51,7 @@
 		:clear-view-delay="-1 /* disable fade-out because of accessibility reasons */"
 		:close-button-contained="false"
 		:dark="true"
+		:light-backdrop="lightBackdrop"
 		:data-handler="handlerId"
 		:enable-slideshow="hasPrevious || hasNext"
 		:slideshow-paused="editing"
@@ -189,34 +190,32 @@
 
 <script>
 import '@nextcloud/dialogs/style.css'
-import Vue from 'vue'
+import Vue, { defineComponent } from 'vue'
 
-import axios from '@nextcloud/axios'
-import { showError } from '@nextcloud/dialogs'
 import { emit, subscribe, unsubscribe } from '@nextcloud/event-bus'
-import { registerFileAction, FileAction, Permission, DefaultType, Node, davRemoteURL, davRootPath } from '@nextcloud/files'
+import { File as NcFile, Node, davRemoteURL, davRootPath, davGetRootPath } from '@nextcloud/files'
 import { loadState } from '@nextcloud/initial-state'
+import { showError } from '@nextcloud/dialogs'
+import axios from '@nextcloud/axios'
 import getSortingConfig from '../services/FileSortingConfig.ts'
 
 import isFullscreen from '@nextcloud/vue/dist/Mixins/isFullscreen.js'
 import isMobile from '@nextcloud/vue/dist/Mixins/isMobile.js'
 
 import { extractFilePaths, sortCompare } from '../utils/fileUtils.ts'
-import canDownload from '../utils/canDownload.js'
 import cancelableRequest from '../utils/CancelableRequest.js'
+import canDownload from '../utils/canDownload.js'
 import configModule from '../models/config.ts'
 import Error from '../components/Error.vue'
 import File from '../models/file.js'
-import filesActionHandler from '../services/FilesActionHandler.js'
-import legacyFilesActionHandler from '../services/LegacyFilesActionHandler.js'
 import getFileInfo from '../services/FileInfo.ts'
 import getFileList from '../services/FileList.ts'
-import Mime from '../mixins/Mime.js'
+import legacyFilesActionHandler from '../services/LegacyFilesActionHandler.js'
 import logger from '../services/logger.js'
+import Mime from '../mixins/Mime.js'
 
 import Delete from 'vue-material-design-icons/Delete.vue'
 import Download from 'vue-material-design-icons/Download.vue'
-import EyeSvg from '@mdi/svg/svg/eye.svg?raw'
 import Fullscreen from 'vue-material-design-icons/Fullscreen.vue'
 import FullscreenExit from 'vue-material-design-icons/FullscreenExit.vue'
 import Pencil from 'vue-material-design-icons/Pencil.vue'
@@ -229,7 +228,7 @@ const NcModal = () => import(
 const NcActionLink = () => import(/* webpackChunkName: 'components' */'@nextcloud/vue/dist/Components/NcActionLink.js')
 const NcActionButton = () => import(/* webpackChunkName: 'components' */'@nextcloud/vue/dist/Components/NcActionButton.js')
 
-export default {
+export default defineComponent({
 	name: 'Viewer',
 
 	components: {
@@ -287,9 +286,9 @@ export default {
 			isSidebarShown: false,
 			isFullscreenMode: false,
 			canSwipe: true,
-			// TODO: remove OCA?.Files?.fileActions when public Files is Vue
-			isStandalone: OCP?.Files === undefined && OCA?.Files?.fileActions === undefined,
+			isStandalone: false,
 			theme: null,
+			lightBackdrop: null,
 			root: davRemoteURL,
 			handlerId: '',
 
@@ -532,6 +531,11 @@ export default {
 	},
 
 	beforeMount() {
+		this.isStandalone = window.OCP?.Files === undefined && window.OCA?.Files?.fileActions === undefined
+		if (this.isStandalone) {
+			logger.info('No Files app found, viewer is now in standalone mode', { ocp: window.OCP?.Files, oca: window.OCA?.Files?.fileActions })
+		}
+
 		// register on load
 		document.addEventListener('DOMContentLoaded', () => {
 			// register all primary components mimes
@@ -551,16 +555,10 @@ export default {
 				this.Sidebar = OCA.Files.Sidebar.state
 			}
 
-			this.registerFileActions()
-
 			logger.info(`${this.handlers.length} viewer handlers registered`, { handlers: this.handlers })
 		})
 
 		window.addEventListener('resize', this.onResize)
-
-		if (this.isStandalone) {
-			logger.info('No OCP.Files app found, viewer is now in standalone mode')
-		}
 	},
 
 	mounted() {
@@ -705,6 +703,8 @@ export default {
 			}
 
 			this.theme = handler.theme ?? 'dark'
+			const defaultThemeIsLight = window.getComputedStyle(document.body).getPropertyValue('--background-invert-if-dark') !== 'invert(100%)'
+			this.lightBackdrop = handler.theme === 'light' || (handler.theme === 'default' && defaultThemeIsLight)
 			this.handlerId = handler.id
 
 			// fallback to default viewer group if enabled
@@ -976,14 +976,7 @@ export default {
 							return false
 						}
 
-						// Always enabled if configured so
-						if (configModule.alwaysShowViewer) {
-							// disable for folders
-							if (nodes.some(node => node.type === 'folder')) {
-								return false
-							}
-							return true
-						}
+						
 
 						// Faster to check if at least one node doesn't match the requirements
 						return !nodes.some(node => (
@@ -1024,7 +1017,7 @@ export default {
 				event.preventDefault()
 				if (this.canDownload) {
 					const a = document.createElement('a')
-					a.href = this.currentFile.davPath
+					a.href = this.currentFile.source ?? this.currentFile.davPath
 					a.download = this.currentFile.basename
 					document.body.appendChild(a)
 					a.click()
@@ -1077,7 +1070,6 @@ export default {
 		 * Open previous available file
 		 */
 		previous() {
-			const oldFileInfo = this.fileList[this.currentIndex]
 			this.currentIndex--
 			if (this.currentIndex < 0) {
 				this.currentIndex = this.fileList.length - 1
@@ -1085,7 +1077,7 @@ export default {
 
 			const fileInfo = this.fileList[this.currentIndex]
 			this.openFileFromList(fileInfo)
-			this.Viewer.onPrev(fileInfo, oldFileInfo)
+			this.Viewer.onPrev(fileInfo)
 			this.updateTitle(this.currentFile.basename)
 		},
 
@@ -1093,7 +1085,6 @@ export default {
 		 * Open next available file
 		 */
 		next() {
-			const oldFileInfo = this.fileList[this.currentIndex]
 			this.currentIndex++
 			if (this.currentIndex > this.fileList.length - 1) {
 				this.currentIndex = 0
@@ -1101,7 +1092,8 @@ export default {
 
 			const fileInfo = this.fileList[this.currentIndex]
 			this.openFileFromList(fileInfo)
-			this.Viewer.onNext(fileInfo, oldFileInfo)
+			this.Viewer.onNext(fileInfo)
+
 			this.updateTitle(this.currentFile.basename)
 		},
 
@@ -1178,16 +1170,25 @@ export default {
 		async onDelete() {
 			try {
 				const fileid = this.currentFile.fileid
-				const url = this.source ?? this.currentFile.davPath
+				const url = this.currentFile.source ?? this.currentFile.davPath
+
+				// Fake node to emit the event until Viewer is migrated to the new Node API.
+				const node = new NcFile({
+					source: url,
+					fileid,
+					mime: this.currentFile.mime,
+					owner: this.currentFile.ownerId,
+					root: url.includes('remote.php/dav') ? davGetRootPath() : undefined,
+				})
 
 				await axios.delete(url)
-				emit('files:node:deleted', { fileid })
+				emit('files:node:deleted', node)
 
-				// fileid is not unique, basename is not unqiue, filename is
+				// fileid is not unique, basename is not unique, filename is
 				const currentIndex = this.fileList.findIndex(file => file.filename === this.currentFile.filename)
 				if (this.hasPrevious || this.hasNext) {
 					// Checking the previous or next file
-					this.hasPrevious ? this.previous() : this.next()
+					this.hasNext ? this.next() : this.previous()
 
 					this.fileList.splice(currentIndex, 1)
 				} else {
@@ -1256,7 +1257,7 @@ export default {
 		},
 
 	},
-}
+})
 </script>
 
 <style lang="scss" scoped>
@@ -1272,8 +1273,12 @@ export default {
 	}
 
 	&--split {
+		display: flex;
+
 		.viewer__file--active {
 			width: 50%;
+			left: 0;
+			position: relative;
 		}
 	}
 

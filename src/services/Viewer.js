@@ -24,6 +24,7 @@ import Images from '../models/images.js'
 import Videos from '../models/videos.js'
 import Audios from '../models/audios.js'
 import Default from '../models/default.ts'
+import logger from './logger.js'
 
 /**
  * Handler type definition
@@ -80,7 +81,7 @@ export default class Viewer {
 		this.registerHandler(Audios)
 		this.registerHandler(Default)
 
-		console.debug('OCA.Viewer initialized')
+		logger.debug('OCA.Viewer initialized')
 	}
 
 	/**
@@ -101,9 +102,9 @@ export default class Viewer {
 	 * @param {Handler} handler a new unregistered handler
 	 */
 	registerHandler(handler) {
-		const err = this.validateHandler(handler)
-		if (err) {
-			console.error(err, handler)
+		const error = this.validateHandler(handler)
+		if (error) {
+			logger.error('Could not register handler', { error, handler })
 			return
 		}
 
