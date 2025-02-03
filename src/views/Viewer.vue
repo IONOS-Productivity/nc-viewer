@@ -61,7 +61,7 @@
 		:inline-actions="canEdit ? 1 : 0"
 		:spread-navigation="true"
 		:style="{ width: isSidebarShown ? `${sidebarPosition}px` : null }"
-		:name="currentFile.basename"
+		:name="modalTitle"
 		:view="currentFile.modal"
 		class="viewer"
 		size="full"
@@ -205,6 +205,7 @@ import isMobile from '@nextcloud/vue/dist/Mixins/isMobile.js'
 import { extractFilePaths, sortCompare } from '../utils/fileUtils.ts'
 import cancelableRequest from '../utils/CancelableRequest.js'
 import canDownload from '../utils/canDownload.js'
+import configModule from '../models/config.ts'
 import Error from '../components/Error.vue'
 import File from '../models/file.js'
 import getFileInfo from '../services/FileInfo.ts'
@@ -408,6 +409,14 @@ export default defineComponent({
 				'theme--default': this.theme === 'default',
 				'image--fullscreen': this.isImage && this.isFullscreenMode,
 			}
+		},
+
+		modalTitle() {
+			if (!configModule.alwaysShowViewer) {
+				return this.currentFile.basename
+			}
+
+			return this.currentFile?.modal?.name === 'Default' ? '' : this.currentFile.basename
 		},
 
 		showComparison() {
@@ -680,6 +689,11 @@ export default defineComponent({
 				handler = this.registeredHandlers[mime] ?? this.registeredHandlers[alias]
 			}
 
+			// fallback to default viewer if enabled
+			if (!handler && configModule.alwaysShowViewer) {
+				handler = this.registeredHandlers[configModule.defaultMimeType]
+			}
+
 			// if we don't have a handler for this mime, abort
 			if (!handler) {
 				logger.error('The following file could not be displayed', { fileInfo })
@@ -693,8 +707,10 @@ export default defineComponent({
 			this.lightBackdrop = handler.theme === 'light' || (handler.theme === 'default' && defaultThemeIsLight)
 			this.handlerId = handler.id
 
+			// fallback to default viewer group if enabled
+			const groupFallback = configModule.alwaysShowViewer ? this.mimeGroups[configModule.defaultMimeType] : undefined
 			// check if part of a group, if so retrieve full files list
-			const group = this.mimeGroups[mime]
+			const group = this.mimeGroups[mime] ?? groupFallback
 			if (this.files && this.files.length > 0) {
 				logger.debug('A files list have been provided. No folder content will be fetched.')
 				// we won't sort files here, let's use the order the array has
@@ -713,8 +729,14 @@ export default defineComponent({
 				const [dirPath] = extractFilePaths(fileInfo.filename)
 				const fileList = await folderRequest(dirPath)
 
-				// filter out the unwanted mimes
-				const filteredFiles = fileList.filter(file => file.mime && mimes.indexOf(file.mime) !== -1)
+				let filteredFiles
+				if (configModule.alwaysShowViewer) {
+					// don't include directories, otherwise accept all mimes
+					filteredFiles = fileList.filter(({ type }) => type !== 'directory')
+				} else {
+					// filter out the unwanted mimes
+					filteredFiles = fileList.filter(file => file.mime && mimes.indexOf(file.mime) !== -1)
+				}
 
 				// sort like the files list
 				// TODO: implement global sorting API
@@ -748,7 +770,7 @@ export default defineComponent({
 		openFileFromList(fileInfo) {
 			// override mimetype if existing alias
 			const mime = fileInfo.mime
-			this.currentFile = new File(fileInfo, mime, this.components[mime])
+			this.currentFile = new File(fileInfo, mime, this.components[mime] || this.components[configModule.defaultMimeType])
 			this.changeSidebar()
 			this.updatePreviousNext()
 		},
@@ -936,6 +958,34 @@ export default defineComponent({
 					this.mimeGroups[group] = []
 				}
 				this.mimeGroups[group].push(mime)
+			}
+		},
+
+		registerFileActions() {
+			if (!this.isStandalone) {
+				registerFileAction(new FileAction({
+					id: 'view',
+					displayName() {
+						return t('viewer', 'View')
+					},
+					iconSvgInline: () => EyeSvg,
+					default: DefaultType.DEFAULT,
+					enabled: (nodes) => {
+						// Disable if not located in user root
+						if (nodes.some(node => !(node.isDavRessource && node.root?.startsWith('/files')))) {
+							return false
+						}
+
+						
+
+						// Faster to check if at least one node doesn't match the requirements
+						return !nodes.some(node => (
+							(node.permissions & Permission.READ) === 0
+							|| !this.Viewer.mimetypes.includes(node.mime)
+						))
+					},
+					exec: filesActionHandler,
+				}))
 			}
 		},
 

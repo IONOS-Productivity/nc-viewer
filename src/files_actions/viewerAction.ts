@@ -6,6 +6,7 @@ import type { Node, View } from '@nextcloud/files'
 
 import { DefaultType, FileAction, Permission, registerFileAction } from '@nextcloud/files'
 import { t } from '@nextcloud/l10n'
+import configModule from '../models/config'
 import svgEye from '@mdi/svg/svg/eye.svg?raw'
 
 /**
@@ -73,6 +74,15 @@ export function registerViewerAction() {
 			// Disable if not located in user root
 			if (nodes.some(node => !(node.isDavRessource && node.root?.startsWith('/files')))) {
 				return false
+			}
+
+			// Always enabled if configured so
+			if (configModule.alwaysShowViewer) {
+				// disable for folders
+				if (nodes.some(node => node.type === 'folder')) {
+					return false
+				}
+				return true
 			}
 
 			return nodes.every((node) =>
