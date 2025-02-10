@@ -77,8 +77,8 @@ const sortCompare = function(fileInfo1, fileInfo2, key, asc = true) {
 	}
 	// finally sort by name
 	return asc
-		? fileInfo1[key].localeCompare(fileInfo2[key], OC.getLanguage(), { numeric: true })
-		: -fileInfo1[key].localeCompare(fileInfo2[key], OC.getLanguage(), { numeric: true })
+		? fileInfo1[key].toString()?.localeCompare(fileInfo2[key].toString(), OC.getLanguage(), { numeric: true })
+		: -fileInfo1[key].toString()?.localeCompare(fileInfo2[key].toString(), OC.getLanguage(), { numeric: true })
 }
 
 export type FileInfo = object
