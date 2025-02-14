@@ -39,6 +39,11 @@ jobs:
       - name: Set up npm ${{ steps.versions.outputs.npmVersion }}
         run: npm i -g npm@"${{ steps.versions.outputs.npmVersion }}"
 
+      - name: Install IONOS dependencies
+        run: |
+            echo "install dependencies from stable30 as fallback" \
+            npm install @mdi/svg@^7.4.47 @nextcloud/vue@^8.22.0 vue-material-design-icons@^5.3.1
+
       - name: Install dependencies
         run: npm ci
 
