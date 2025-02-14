@@ -94,9 +94,9 @@ const genFileInfo = function(obj: FileStat): FileInfo {
 	Object.keys(obj).forEach(key => {
 		const data = obj[key]
 
-		// flatten object if any
+		// flatten object if any without overwriting type
 		if (!!data && typeof data === 'object' && !Array.isArray(data)) {
-			Object.assign(fileInfo, genFileInfo(data))
+			Object.assign(fileInfo, genFileInfo(data), fileInfo["type"] ? { type: fileInfo["type"] } : {})
 		} else {
 			// format key and add it to the fileInfo
 			if (data === 'false') {
