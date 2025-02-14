@@ -13,8 +13,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        branches: ["main", "master", "stable27", "stable26"]
-  
+#        branches: ["main", "master", "stable27", "stable26"]
+        branches: ["ionos-dev"]
+
     name: cypress-snapshot-update-${{ matrix.branches }}
 
     steps:
