@@ -739,8 +739,8 @@ export default defineComponent({
 
 				let filteredFiles
 				if (configModule.alwaysShowViewer) {
-					// don't include directories, otherwise accept all mimes
-					filteredFiles = fileList.filter(({ type }) => type !== 'directory')
+					// only include files with mime to exclude directories, otherwise accept all mimes
+					filteredFiles = fileList.filter(file => file?.mime)
 				} else {
 					// filter out the unwanted mimes
 					filteredFiles = fileList.filter(file => file.mime && mimes.indexOf(file.mime) !== -1)
