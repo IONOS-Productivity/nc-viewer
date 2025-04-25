@@ -757,7 +757,7 @@ export default defineComponent({
 			}
 
 			// get saved fileInfo
-			fileInfo = this.fileList[this.currentIndex]
+			fileInfo = this.currentIndex !== -1 ? this.fileList[this.currentIndex] : fileInfo
 
 			// show file
 			this.currentFile = new File(fileInfo, mime, handler.component)
