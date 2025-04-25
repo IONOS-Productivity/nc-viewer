@@ -737,8 +737,16 @@ export default defineComponent({
 
 				let filteredFiles
 				if (configModule.alwaysShowViewer) {
-					// only include files with mime to exclude directories, otherwise accept all mimes
-					filteredFiles = fileList.filter(file => file?.mime)
+					// only include files with mime to exclude directories
+					// and office documents/pdfs to exclude collabora files
+					// otherwise accept all mimes
+					filteredFiles = fileList.filter(file => {
+						const mime = file?.mime;
+						const isOfficeDocument = mime && OC.MimeTypeList.aliases[mime]?.startsWith('x-office');
+						const isPdf = mime && mime === 'application/pdf';
+
+						return mime && !isOfficeDocument && !isPdf;
+					})
 				} else {
 					// filter out the unwanted mimes
 					filteredFiles = fileList.filter(file => file.mime && mimes.indexOf(file.mime) !== -1)
