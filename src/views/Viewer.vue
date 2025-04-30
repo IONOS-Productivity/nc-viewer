@@ -937,6 +937,7 @@ export default defineComponent({
 				OCA.Files.fileActions.registerAction({
 					name: 'view',
 					displayName: t('viewer', 'View'),
+					iconClass: 'icon-viewer',
 					mime,
 					permissions: OC.PERMISSION_READ,
 					actionHandler: legacyFilesActionHandler,
