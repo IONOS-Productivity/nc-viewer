@@ -219,6 +219,7 @@ import Download from 'vue-material-design-icons/Download.vue'
 import Fullscreen from 'vue-material-design-icons/Fullscreen.vue'
 import FullscreenExit from 'vue-material-design-icons/FullscreenExit.vue'
 import Pencil from 'vue-material-design-icons/Pencil.vue'
+import svgEye from '@mdi/svg/svg/eye.svg?raw'
 
 // Dynamic loading
 const NcModal = () => import(
@@ -937,6 +938,7 @@ export default defineComponent({
 				OCA.Files.fileActions.registerAction({
 					name: 'view',
 					displayName: t('viewer', 'View'),
+					icon: () => svgEye,
 					mime,
 					permissions: OC.PERMISSION_READ,
 					actionHandler: legacyFilesActionHandler,
