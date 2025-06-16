@@ -1,35 +1,19 @@
 <!--
- - @copyright Copyright (c) 2020 Daniel Kesselberg <mail@danielkesselberg.de>
- -
- - @author Daniel Kesselberg <mail@danielkesselberg.de>
- -
- - @license AGPL-3.0-or-later
- -
- - This program is free software: you can redistribute it and/or modify
- - it under the terms of the GNU Affero General Public License as
- - published by the Free Software Foundation, either version 3 of the
- - License, or (at your option) any later version.
- -
- - This program is distributed in the hope that it will be useful,
- - but WITHOUT ANY WARRANTY; without even the implied warranty of
- - MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- - GNU Affero General Public License for more details.
- -
- - You should have received a copy of the GNU Affero General Public License
- - along with this program. If not, see <http://www.gnu.org/licenses/>.
- -
- -->
+  - SPDX-FileCopyrightText: 2020 Nextcloud GmbH and Nextcloud contributors
+  - SPDX-License-Identifier: AGPL-3.0-or-later
+-->
 
 <template>
 	<!-- Plyr currently replaces the parent. Wrapping to prevent this
 	https://github.com/redxtech/vue-plyr/issues/259 -->
-	<div v-if="src">
+	<div v-if="url">
 		<VuePlyr ref="plyr"
 			:options="options">
 			<audio ref="audio"
 				:autoplay="active"
-				:src="src"
+				:src="url"
 				preload="metadata"
+				@error.capture.prevent.stop.once="onFail"
 				@ended="donePlaying"
 				@canplay="doneLoading">
 
@@ -45,18 +29,30 @@
 	</div>
 </template>
 
-<script>
+<script lang='ts'>
+import Vue from 'vue'
+import AsyncComputed from 'vue-async-computed'
 // eslint-disable-next-line n/no-missing-import
 import '@skjnldsv/vue-plyr/dist/vue-plyr.css'
+
 import logger from '../services/logger.js'
+import { preloadMedia } from '../services/mediaPreloader'
 
 const VuePlyr = () => import(/* webpackChunkName: 'plyr' */'@skjnldsv/vue-plyr')
+
+Vue.use(AsyncComputed)
 
 export default {
 	name: 'Audios',
 
 	components: {
 		VuePlyr,
+	},
+
+	data() {
+		return {
+			fallback: false,
+		}
 	},
 
 	computed: {
@@ -70,6 +66,16 @@ export default {
 				blankVideo: '/blank.aac',
 				controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'volume', 'settings'],
 				loadSprite: false,
+			}
+		},
+	},
+
+	asyncComputed: {
+		async url(): Promise<string> {
+			if (this.fallback) {
+				return preloadMedia(this.filename)
+			} else {
+				return this.src
 			}
 		},
 	},
@@ -110,6 +116,14 @@ export default {
 		donePlaying() {
 			this.$refs.audio.autoplay = false
 			this.$refs.audio.load()
+		},
+
+		// Fallback to the original image if not already done
+		onFail() {
+			if (!this.fallback) {
+				console.error(`Loading of file ${this.filename} failed, falling back to fetching it by hand`)
+				this.fallback = true
+			}
 		},
 	},
 }
