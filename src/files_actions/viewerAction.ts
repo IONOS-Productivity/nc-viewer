@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 import type { Node, View } from '@nextcloud/files'
-
+import configModule from '../models/config'
 import { DefaultType, FileAction, Permission, registerFileAction } from '@nextcloud/files'
 import { t } from '@nextcloud/l10n'
 import svgEye from '@mdi/svg/svg/eye.svg?raw'
@@ -73,6 +73,11 @@ export function registerViewerAction() {
 			// Disable if not located in user root
 			if (nodes.some(node => !(node.isDavRessource && node.root?.startsWith('/files')))) {
 				return false
+			}
+
+			// Always enabled if configured so
+			if (configModule.alwaysShowViewer) {
+				return true
 			}
 
 			return nodes.every((node) =>
