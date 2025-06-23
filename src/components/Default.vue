@@ -29,12 +29,12 @@ export default {
 
 	computed: {
 		mimeIcon() {
-			return OC.MimeType.getIconUrl(this.mime);
-		}
+			return OC.MimeType.getIconUrl(this.mime)
+		},
 	},
 
 	mounted() {
-		this.doneLoading();
+		this.doneLoading()
 	},
 }
 </script>
