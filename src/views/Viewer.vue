@@ -741,11 +741,11 @@ export default defineComponent({
 					// and office documents/pdfs to exclude collabora files
 					// otherwise accept all mimes
 					filteredFiles = fileList.filter(file => {
-						const mime = file?.mime;
-						const isOfficeDocument = mime && OC.MimeTypeList.aliases[mime]?.startsWith('x-office');
-						const isPdf = mime && mime === 'application/pdf';
+						const mime = file?.mime
+						const isOfficeDocument = mime && OC.MimeTypeList.aliases[mime]?.startsWith('x-office')
+						const isPdf = mime && mime === 'application/pdf'
 
-						return mime && !isOfficeDocument && !isPdf;
+						return mime && !isOfficeDocument && !isPdf
 					})
 				} else {
 					// filter out the unwanted mimes
@@ -991,7 +991,7 @@ export default defineComponent({
 							return false
 						}
 
-						
+
 
 						// Faster to check if at least one node doesn't match the requirements
 						return !nodes.some(node => (
