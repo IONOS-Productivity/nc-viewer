@@ -57,7 +57,7 @@ img {
 }
 
 .title {
-	color: var(--color-primary-element-text);
+	color: var(--color-primary-text);
 	font-weight: bold;
 	font-size: 1.4em;
 	overflow: hidden;
