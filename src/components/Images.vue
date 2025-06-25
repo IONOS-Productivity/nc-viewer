@@ -129,7 +129,7 @@ export default {
 			shiftX: 0,
 			shiftY: 0,
 			zoomRatio: 1,
-			previewFailed: false,
+			fallback: false,
 			originalFailed: false,
 			livePhotoCanBePlayed: false,
 		}
@@ -199,7 +199,7 @@ export default {
 			}
 
 			// If loading the preview failed once, let's load the original file
-			if (this.previewFailed) {
+			if (this.fallback) {
 				return this.src
 			}
 
@@ -363,8 +363,8 @@ export default {
 				// Loading the original image was already attempted, don't bother handling more errors
 				return
 			}
-			if (!this.previewFailed) {
-				this.previewFailed = true
+			if (!this.fallback) {
+				this.fallback = true
 				console.error(`Loading of file preview ${basename(this.src)} failed, falling back to original file`)
 			} else {
 				this.originalFailed = true
