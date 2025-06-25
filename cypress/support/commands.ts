@@ -1,34 +1,20 @@
 /**
- * @copyright Copyright (c) 2019 John Molakvoæ <skjnldsv@protonmail.com>
- *
- * @author John Molakvoæ <skjnldsv@protonmail.com>
- *
- * @license AGPL-3.0-or-later
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program. If not, see <http://www.gnu.org/licenses/>.
- *
+ * SPDX-FileCopyrightText: 2019 Nextcloud GmbH and Nextcloud contributors
+ * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import { addCommands, User } from '@nextcloud/cypress'
-import { basename } from 'path'
-import axios from '@nextcloud/axios'
+import { addCommands } from '@nextcloud/cypress'
+import { Permission } from '@nextcloud/files'
+import { ShareType } from '@nextcloud/sharing'
 import { addCompareSnapshotCommand } from 'cypress-visual-regression/dist/command'
+import { basename } from 'path'
 
 addCommands()
-addCompareSnapshotCommand()
+addCompareSnapshotCommand({
+	errorThreshold: 0.01,
+})
 
-const url = Cypress.config('baseUrl').replace(/\/index.php\/?$/g, '')
+const url = Cypress.config('baseUrl')!.replace(/\/index.php\/?$/g, '')
 Cypress.env('baseUrl', url)
 
 /**
@@ -97,8 +83,9 @@ Cypress.Commands.add('openFile', fileName => {
 	cy.wait(250)
 })
 
-Cypress.Commands.add('openFileInShare', fileName => {
-	cy.get(`.files-fileList tr[data-file="${CSS.escape(fileName)}"] a.name`).click()
+Cypress.Commands.add('openFileInSingleShare', () => {
+	cy.get('tr[data-cy-files-list-row-name]')
+		.should('have.length', 1)
 	// eslint-disable-next-line
 	cy.wait(250)
 })
@@ -125,6 +112,40 @@ Cypress.Commands.add(
 	},
 )
 
+interface ShareOptions {
+	shareType: number
+	shareWith?: string
+	permissions: number
+	attributes?: { value: boolean, key: string, scope: string}[]
+}
+
+Cypress.Commands.add('createShare', (path: string, shareOptions?: ShareOptions) => {
+	return cy.request('/csrftoken').then(({ body }) => {
+		const requesttoken = body.token
+
+		return cy.request({
+			method: 'POST',
+			url: '../ocs/v2.php/apps/files_sharing/api/v1/shares?format=json',
+			headers: {
+				requesttoken,
+			},
+			body: {
+				path,
+				permissions: Permission.READ,
+				...shareOptions,
+				attributes: shareOptions?.attributes && JSON.stringify(shareOptions.attributes),
+			},
+		}).then(({ body }) => {
+			const shareToken = body.ocs?.data?.token
+			if (shareToken === undefined) {
+				throw new Error('Invalid OCS response')
+			}
+			cy.log('Share link created', shareToken)
+			return cy.wrap(shareToken)
+		})
+	})
+})
+
 /**
  * Create a share link and return the share url
  *
@@ -132,25 +153,7 @@ Cypress.Commands.add(
  * @return {string} the share link url
  */
 Cypress.Commands.add('createLinkShare', path => {
-	return cy.window().then(async window => {
-		try {
-			const request = await axios.post(`${Cypress.env('baseUrl')}/ocs/v2.php/apps/files_sharing/api/v1/shares`, {
-				path,
-				shareType: window.OC.Share.SHARE_TYPE_LINK,
-			}, {
-				headers: {
-					requesttoken: window.OC.requestToken,
-				},
-			})
-			if (!('ocs' in request.data) || !('token' in request.data.ocs.data && request.data.ocs.data.token.length > 0)) {
-				throw request
-			}
-			cy.log('Share link created', request.data.ocs.data.token)
-			return cy.wrap(request.data.ocs.data.token)
-		} catch (error) {
-			console.error(error)
-		}
-	}).should('have.length', 15)
+	return cy.createShare(path, { shareType: ShareType.Link })
 })
 
 Cypress.Commands.overwrite('compareSnapshot', (originalFn, subject, name, options) => {
