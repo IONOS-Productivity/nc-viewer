@@ -1,24 +1,7 @@
 <!--
- - @copyright Copyright (c) 2019 John Molakvoæ <skjnldsv@protonmail.com>
- -
- - @author John Molakvoæ <skjnldsv@protonmail.com>
- -
- - @license AGPL-3.0-or-later
- -
- - This program is free software: you can redistribute it and/or modify
- - it under the terms of the GNU Affero General Public License as
- - published by the Free Software Foundation, either version 3 of the
- - License, or (at your option) any later version.
- -
- - This program is distributed in the hope that it will be useful,
- - but WITHOUT ANY WARRANTY; without even the implied warranty of
- - MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- - GNU Affero General Public License for more details.
- -
- - You should have received a copy of the GNU Affero General Public License
- - along with this program. If not, see <http://www.gnu.org/licenses/>.
- -
- -->
+  - SPDX-FileCopyrightText: 2019 Nextcloud GmbH and Nextcloud contributors
+  - SPDX-License-Identifier: AGPL-3.0-or-later
+-->
 
 <template>
 	<div class="image_container">
@@ -36,15 +19,17 @@
 				:class="{
 					dragging,
 					loaded,
-					zoomed: zoomRatio !== 1
+					zoomed: zoomRatio > 1
 				}"
 				:src="data"
 				:style="imgStyle"
 				@error.capture.prevent.stop="onFail"
 				@load="updateImgSize"
-				@wheel="updateZoom"
+				@wheel.stop.prevent="updateZoom"
 				@dblclick.prevent="onDblclick"
-				@mousedown.prevent="dragStart">
+				@pointerdown.prevent="pointerDown"
+				@pointerup.prevent="pointerUp"
+				@pointermove.prevent="pointerMove">
 
 			<template v-if="livePhoto">
 				<video v-show="livePhotoCanBePlayed"
@@ -52,7 +37,7 @@
 					:class="{
 						dragging,
 						loaded,
-						zoomed: zoomRatio !== 1
+						zoomed: zoomRatio > 1
 					}"
 					:style="imgStyle"
 					:playsinline="true"
@@ -61,10 +46,12 @@
 					preload="metadata"
 					@canplaythrough="doneLoadingLivePhoto"
 					@loadedmetadata="updateImgSize"
-					@wheel="updateZoom"
+					@wheel.stop.prevent="updateZoom"
 					@error.capture.prevent.stop.once="onFail"
 					@dblclick.prevent="onDblclick"
-					@mousedown.prevent="dragStart"
+					@pointerdown.prevent="pointerDown"
+					@pointerup.prevent="pointerUp"
+					@pointermove.prevent="pointerMove"
 					@ended="stopLivePhoto" />
 				<button v-if="width !== 0"
 					class="live-photo_play_button"
@@ -86,7 +73,7 @@
 	</div>
 </template>
 
-<script>
+<script lang="ts">
 import Vue from 'vue'
 import AsyncComputed from 'vue-async-computed'
 import PlayCircleOutline from 'vue-material-design-icons/PlayCircleOutline.vue'
@@ -100,6 +87,7 @@ import Default from './Default.vue'
 import ImageEditor from './ImageEditor.vue'
 import { findLivePhotoPeerFromFileId } from '../utils/livePhotoUtils'
 import { getDavPath } from '../utils/fileUtils'
+import { preloadMedia } from '../services/mediaPreloader'
 
 Vue.use(AsyncComputed)
 
@@ -114,10 +102,6 @@ export default {
 	},
 
 	props: {
-		canZoom: {
-			type: Boolean,
-			default: false,
-		},
 		editing: {
 			type: Boolean,
 			default: false,
@@ -129,9 +113,13 @@ export default {
 			shiftX: 0,
 			shiftY: 0,
 			zoomRatio: 1,
-			previewFailed: false,
+			fallback: false,
 			originalFailed: false,
 			livePhotoCanBePlayed: false,
+			zooming: false,
+			pinchDistance: 0,
+			pinchStartZoomRatio: 1,
+			pointerCache: [],
 		}
 	},
 
@@ -150,7 +138,10 @@ export default {
 		},
 		imgStyle() {
 			if (this.zoomRatio === 1) {
-				return {}
+				return {
+					height: this.zoomHeight + 'px',
+					width: this.zoomWidth + 'px',
+				}
 			}
 			return {
 				marginTop: Math.round(this.shiftY * 2) + 'px',
@@ -195,11 +186,16 @@ export default {
 			// If there is no preview and we have a direct source
 			// load it instead
 			if (this.source && !this.hasPreview && !this.previewUrl) {
-				return this.source
+				// If loading the source failed once, let's try fetching it by had
+				if (this.fallback) {
+					return preloadMedia(this.filename)
+				} else {
+					return this.source
+				}
 			}
 
 			// If loading the preview failed once, let's load the original file
-			if (this.previewFailed) {
+			if (this.fallback) {
 				return this.src
 			}
 
@@ -211,11 +207,13 @@ export default {
 			// the item was hidden before and is now the current view
 			if (val === true && old === false) {
 				this.resetZoom()
-				// end the dragging if your mouse go out of the content
-				window.addEventListener('mouseout', this.dragEnd)
+				// end the dragging if your pointer (mouse or touch) go out of the content
+				// Not sure why ???
+				window.addEventListener('pointerout', this.pointerUp)
 			// the item is not displayed
 			} else if (val === false) {
-				window.removeEventListener('mouseout', this.dragEnd)
+				// Not sure why ???
+				window.removeEventListener('pointerout', this.pointerUp)
 			}
 		},
 	},
@@ -244,6 +242,49 @@ export default {
 			return `data:${this.mime};base64,${btoa(unescape(encodeURIComponent(file.data)))}`
 		},
 
+		// Helper methods for zoom/pan operations
+		updateShift(newShiftX, newShiftY, newZoomRatio) {
+			const maxShiftX = this.width * newZoomRatio - this.width
+			const maxShiftY = this.height * newZoomRatio - this.height
+			this.shiftX = Math.min(Math.max(newShiftX, -maxShiftX / 2), maxShiftX / 2)
+			this.shiftY = Math.min(Math.max(newShiftY, -maxShiftY / 2), maxShiftY / 2)
+		},
+
+		// Change zoom ratio of the image to newZoomRatio.
+		// Try to make sure that image position at stableX, stableY
+		// in client coordinates stays in the same place on the screen.
+		updateZoomAndShift(stableX, stableY, newZoomRatio) {
+			if (!this.canZoom) {
+				return
+			}
+
+			// scrolling position relative to the image
+			const element = this.$refs.image ?? this.$refs.video
+			const scrollX = stableX - element.getBoundingClientRect().x - (this.width * this.zoomRatio / 2)
+			const scrollY = stableY - element.getBoundingClientRect().y - (this.height * this.zoomRatio / 2)
+			const scrollPercX = scrollX / (this.width * this.zoomRatio)
+			const scrollPercY = scrollY / (this.height * this.zoomRatio)
+
+			// calc how much the img grow from its current size
+			// and adjust the margin accordingly
+			const growX = this.width * newZoomRatio - this.width * this.zoomRatio
+			const growY = this.height * newZoomRatio - this.height * this.zoomRatio
+
+			// compensate for existing margins
+			const newShiftX = this.shiftX - scrollPercX * growX
+			const newShiftY = this.shiftY - scrollPercY * growY
+			this.updateShift(newShiftX, newShiftY, newZoomRatio)
+			this.zoomRatio = newZoomRatio
+		},
+
+		distanceBetweenTouches() {
+			const t0 = this.pointerCache[0]
+			const t1 = this.pointerCache[1]
+			const diffX = (t1.x - t0.x)
+			const diffY = (t1.y - t0.y)
+			return Math.sqrt(diffX * diffX + diffY * diffY)
+		},
+
 		/**
 		 * Handle zooming
 		 *
@@ -255,17 +296,7 @@ export default {
 				return
 			}
 
-			event.stopPropagation()
-			event.preventDefault()
-
-			// scrolling position relative to the image
-			const element = this.$refs.image ?? this.$refs.video
-			const scrollX = event.clientX - element.x - (this.width * this.zoomRatio / 2)
-			const scrollY = event.clientY - element.y - (this.height * this.zoomRatio / 2)
-			const scrollPercX = scrollX / (this.width * this.zoomRatio)
-			const scrollPercY = scrollY / (this.height * this.zoomRatio)
 			const isZoomIn = event.deltaY < 0
-
 			const newZoomRatio = isZoomIn
 				? Math.min(this.zoomRatio * 1.1, 5) // prevent too big zoom
 				: Math.max(this.zoomRatio / 1.1, 1) // prevent too small zoom
@@ -275,16 +306,8 @@ export default {
 				return this.resetZoom()
 			}
 
-			// calc how much the img grow from its current size
-			// and adjust the margin accordingly
-			const growX = this.width * newZoomRatio - this.width * this.zoomRatio
-			const growY = this.height * newZoomRatio - this.height * this.zoomRatio
-
-			// compensate for existing margins
 			this.disableSwipe()
-			this.shiftX = this.shiftX - scrollPercX * growX
-			this.shiftY = this.shiftY - scrollPercY * growY
-			this.zoomRatio = newZoomRatio
+			this.updateZoomAndShift(event.clientX, event.clientY, newZoomRatio)
 		},
 
 		resetZoom() {
@@ -294,52 +317,94 @@ export default {
 			this.shiftY = 0
 		},
 
+		// Pinch-zoom implementation based on:
+		// https://developer.mozilla.org/en-US/docs/Web/API/Pointer_events/Pinch_zoom_gestures
+
 		/**
-		 * Dragging handlers
+		 * Dragging and (pinch) zooming handlers
 		 *
 		 * @param {DragEvent} event the event
 		 */
-		dragStart(event) {
-			const { pageX, pageY } = event
+		pointerDown(event) {
+			// New pointer - mouse down or additional touch --> store client coordinates in the pointer cache
+			this.pointerCache.push({ pointerId: event.pointerId, x: event.clientX, y: event.clientY })
 
-			this.dragX = pageX
-			this.dragY = pageY
-			this.dragging = true
-			const element = this.$refs.image ?? this.$refs.video
-			element.onmouseup = this.dragEnd
-			element.onmousemove = this.dragHandler
+			// Single touch or mouse down --> start dragging
+			if (this.pointerCache.length === 1) {
+				this.dragX = event.clientX
+				this.dragY = event.clientY
+				this.dragging = true
+			}
+
+			// Two touches --> start (pinch) zooming
+			if (this.pointerCache.length === 2) {
+				// Calculate base (reference) distance between touches
+				this.pinchDistance = this.distanceBetweenTouches()
+				this.pinchStartZoomRatio = this.zoomRatio
+				this.zooming = true
+				this.disableSwipe()
+			}
 		},
 		/**
 		 * @param {DragEvent} event the event
 		 */
-		dragEnd(event) {
-			event.preventDefault()
-
+		 pointerUp(event) {
+			// Remove pointer from the pointer cache
+			const index = this.pointerCache.findIndex(
+				(cachedEv) => cachedEv.pointerId === event.pointerId,
+			)
+			this.pointerCache.splice(index, 1)
 			this.dragging = false
-			const element = this.$refs.image ?? this.$refs.video
-			if (element) {
-				element.onmouseup = null
-				element.onmousemove = null
-			}
+			this.zooming = false
 		},
 		/**
 		 * @param {DragEvent} event the event
 		 */
-		dragHandler(event) {
-			event.preventDefault()
-			const { pageX, pageY } = event
-
-			if (this.dragging && this.zoomRatio > 1 && pageX > 0 && pageY > 0) {
-				const moveX = this.shiftX + (pageX - this.dragX)
-				const moveY = this.shiftY + (pageY - this.dragY)
-				const growX = this.zoomWidth - this.width
-				const growY = this.zoomHeight - this.height
-
-				this.shiftX = Math.min(Math.max(moveX, -growX / 2), growX / 2)
-				this.shiftY = Math.min(Math.max(moveY, -growY / 2), growY / 2)
-				this.dragX = pageX
-				this.dragY = pageY
+		 pointerMove(event) {
+			if (!this.canZoom) {
+				return
 			}
+
+			if (this.pointerCache.length > 0) {
+				// Update pointer position in the pointer cache
+				const index = this.pointerCache.findIndex(
+					(cachedEv) => cachedEv.pointerId === event.pointerId,
+				)
+				if (index >= 0) {
+					this.pointerCache[index].x = event.clientX
+					this.pointerCache[index].y = event.clientY
+				}
+			}
+
+			// Single touch or mouse down --> dragging
+			if (this.pointerCache.length === 1 && this.dragging && !this.zooming && this.zoomRatio > 1) {
+				const { clientX, clientY } = event
+				const newShiftX = this.shiftX + (clientX - this.dragX)
+				const newShiftY = this.shiftY + (clientY - this.dragY)
+
+				this.updateShift(newShiftX, newShiftY, this.zoomRatio)
+
+				this.dragX = clientX
+				this.dragY = clientY
+			}
+
+			// Two touches --> (pinch) zooming
+			if (this.pointerCache.length === 2 && this.zooming) {
+				// Calculate current distance between touches
+				const newDistance = this.distanceBetweenTouches()
+
+				// Calculate new zoom ratio - keep it between 1 and 5
+				const newZoomRatio = Math.min(Math.max(this.pinchStartZoomRatio * (newDistance / this.pinchDistance), 1), 5)
+
+				// Calculate "stable" point - in the middle between touches
+				const t0 = this.pointerCache[0]
+				const t1 = this.pointerCache[1]
+				const stableX = (t0.x + t1.x) / 2
+				const stableY = (t0.y + t1.y) / 2
+
+				this.updateZoomAndShift(stableX, stableY, newZoomRatio)
+			}
+
 		},
 		onDblclick() {
 			if (!this.canZoom) {
@@ -363,8 +428,8 @@ export default {
 				// Loading the original image was already attempted, don't bother handling more errors
 				return
 			}
-			if (!this.previewFailed) {
-				this.previewFailed = true
+			if (!this.fallback) {
+				this.fallback = true
 				console.error(`Loading of file preview ${basename(this.src)} failed, falling back to original file`)
 			} else {
 				this.originalFailed = true
@@ -408,14 +473,13 @@ $checkered-color: #efefef;
 }
 
 img, video {
-	max-width: 100%;
-	max-height: 100%;
 	align-self: center;
 	justify-self: center;
 	// black while loading
 	background-color: #000;
 	// disable animations during zooming/resize
 	transition: none !important;
+	touch-action: none;
 	// show checkered bg on hover if not currently zooming (but ok if zoomed)
 	&:hover {
 		background-image: linear-gradient(45deg, #{$checkered-color} 25%, transparent 25%),
@@ -430,9 +494,6 @@ img, video {
 		background-color: #fff;
 	}
 	&.zoomed {
-		position: absolute;
-		max-height: none;
-		max-width: none;
 		z-index: 10010;
 		cursor: move;
 	}

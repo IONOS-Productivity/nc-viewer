@@ -1,25 +1,7 @@
 <!--
- - @copyright Copyright (c) 2019 John Molakvoæ <skjnldsv@protonmail.com>
- - @copyright Copyright (c) 2020 Gary Kim <gary@garykim.dev>
- -
- - @author John Molakvoæ <skjnldsv@protonmail.com>
- -
- - @license AGPL-3.0-or-later
- -
- - This program is free software: you can redistribute it and/or modify
- - it under the terms of the GNU Affero General Public License as
- - published by the Free Software Foundation, either version 3 of the
- - License, or (at your option) any later version.
- -
- - This program is distributed in the hope that it will be useful,
- - but WITHOUT ANY WARRANTY; without even the implied warranty of
- - MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- - GNU Affero General Public License for more details.
- -
- - You should have received a copy of the GNU Affero General Public License
- - along with this program. If not, see <http://www.gnu.org/licenses/>.
- -
- -->
+  - SPDX-FileCopyrightText: 2019 Nextcloud GmbH and Nextcloud contributors
+  - SPDX-License-Identifier: AGPL-3.0-or-later
+-->
 
 <template>
 	<!-- Single-file rendering -->
@@ -32,6 +14,7 @@
 			ref="content"
 			:active="true"
 			:can-swipe="false"
+			:can-zoom="false"
 			v-bind="currentFile"
 			:file-list="[currentFile]"
 			:is-full-screen="false"
@@ -62,7 +45,6 @@
 		:spread-navigation="true"
 		:style="{ width: isSidebarShown ? `${sidebarPosition}px` : null }"
 		:name="modalTitle"
-		:view="currentFile.modal"
 		class="viewer"
 		size="full"
 		@close="close"
@@ -99,7 +81,7 @@
 				:close-after-click="true"
 				:href="downloadPath">
 				<template #icon>
-					<Download :size="24" />
+					<Download :size="20" />
 				</template>
 				{{ t('viewer', 'Download') }}
 			</NcActionLink>
@@ -107,13 +89,16 @@
 				:close-after-click="true"
 				@click="onDelete">
 				<template #icon>
-					<Delete :size="22" />
+					<Delete :size="20" />
 				</template>
 				{{ t('viewer', 'Delete') }}
 			</NcActionButton>
 		</template>
 
-		<div class="viewer__content" :class="contentClass" @click.self.exact="close">
+		<div class="viewer__content"
+			:class="contentClass"
+			@click.self.exact="close"
+			@contextmenu="preventContextMenu">
 			<!-- COMPARE FILE -->
 			<div v-if="comparisonFile && !comparisonFile.failed && showComparison" class="viewer__file-wrapper">
 				<component :is="comparisonFile.modal"
@@ -156,7 +141,7 @@
 					v-bind="currentFile"
 					:active="true"
 					:can-swipe.sync="canSwipe"
-					:can-zoom="canZoom"
+					:can-zoom="true"
 					:editing.sync="editing"
 					:file-list="fileList"
 					:is-full-screen="isFullscreen"
@@ -193,26 +178,25 @@ import '@nextcloud/dialogs/style.css'
 import Vue, { defineComponent } from 'vue'
 
 import { emit, subscribe, unsubscribe } from '@nextcloud/event-bus'
-import { File as NcFile, Node, davRemoteURL, davRootPath, davGetRootPath } from '@nextcloud/files'
 import { loadState } from '@nextcloud/initial-state'
+import { File as NcFile, Node, davRemoteURL, davRootPath, davGetRootPath } from '@nextcloud/files'
 import { showError } from '@nextcloud/dialogs'
 import axios from '@nextcloud/axios'
-import getSortingConfig from '../services/FileSortingConfig.ts'
 
 import isFullscreen from '@nextcloud/vue/dist/Mixins/isFullscreen.js'
 import isMobile from '@nextcloud/vue/dist/Mixins/isMobile.js'
 
+import { canDownload } from '../utils/canDownload.ts'
 import { extractFilePaths, sortCompare } from '../utils/fileUtils.ts'
+import getSortingConfig from '../services/FileSortingConfig.ts'
 import cancelableRequest from '../utils/CancelableRequest.js'
-import canDownload from '../utils/canDownload.js'
 import configModule from '../models/config.ts'
 import Error from '../components/Error.vue'
 import File from '../models/file.js'
 import getFileInfo from '../services/FileInfo.ts'
 import getFileList from '../services/FileList.ts'
-import legacyFilesActionHandler from '../services/LegacyFilesActionHandler.js'
-import logger from '../services/logger.js'
 import Mime from '../mixins/Mime.js'
+import logger from '../services/logger.js'
 
 import Delete from 'vue-material-design-icons/Delete.vue'
 import Download from 'vue-material-design-icons/Download.vue'
@@ -221,12 +205,9 @@ import FullscreenExit from 'vue-material-design-icons/FullscreenExit.vue'
 import Pencil from 'vue-material-design-icons/Pencil.vue'
 
 // Dynamic loading
-const NcModal = () => import(
-	/* webpackChunkName: 'components' */
-	/* webpackPrefetch: true */
-	'@nextcloud/vue/dist/Components/NcModal.js')
-const NcActionLink = () => import(/* webpackChunkName: 'components' */'@nextcloud/vue/dist/Components/NcActionLink.js')
-const NcActionButton = () => import(/* webpackChunkName: 'components' */'@nextcloud/vue/dist/Components/NcActionButton.js')
+const NcModal = () => import('@nextcloud/vue/dist/Components/NcModal.js')
+const NcActionLink = () => import('@nextcloud/vue/dist/Components/NcActionLink.js')
+const NcActionButton = () => import('@nextcloud/vue/dist/Components/NcActionButton.js')
 
 export default defineComponent({
 	name: 'Viewer',
@@ -326,9 +307,6 @@ export default defineComponent({
 		canLoop() {
 			return this.Viewer.canLoop
 		},
-		canZoom() {
-			return !this.Viewer.el
-		},
 		isStartOfList() {
 			return this.currentIndex === 0
 		},
@@ -380,12 +358,16 @@ export default defineComponent({
 		},
 
 		/**
-		 * Is the current user allowed to download the file in public mode?
+		 * Is the current user allowed to download the file
 		 *
 		 * @return {boolean}
 		 */
 		canDownload() {
-			return canDownload() && !this.comparisonFile
+			// download not possible for comparison
+			if (this.comparisonFile) {
+				return false
+			}
+			return this.currentFile && canDownload(this.currentFile)
 		},
 
 		/**
@@ -396,7 +378,7 @@ export default defineComponent({
 		 */
 		canEdit() {
 			return !this.isMobile
-				&& canDownload()
+				&& this.canDownload
 				&& this.currentFile?.permissions?.includes('W')
 				&& this.isImage
 				&& !this.comparisonFile
@@ -516,7 +498,7 @@ export default defineComponent({
 
 		// user reached the end of list
 		async isEndOfList(isEndOfList) {
-			if (!isEndOfList) {
+			if (!isEndOfList || this.el) {
 				return
 			}
 
@@ -534,9 +516,9 @@ export default defineComponent({
 	},
 
 	beforeMount() {
-		this.isStandalone = window.OCP?.Files === undefined && window.OCA?.Files?.fileActions === undefined
+		this.isStandalone = window.OCP?.Files === undefined
 		if (this.isStandalone) {
-			logger.info('No Files app found, viewer is now in standalone mode', { ocp: window.OCP?.Files, oca: window.OCA?.Files?.fileActions })
+			logger.info('No OCP.Files app found, viewer is now in standalone mode')
 		}
 
 		// register on load
@@ -595,6 +577,18 @@ export default defineComponent({
 		uniqueKey(file) {
 			return '' + file.fileid + file.source
 		},
+
+		/**
+		 * If there is no download permission also hide the context menu.
+		 * @param {MouseEvent} event The mouse click event
+		 */
+		preventContextMenu(event) {
+			if (this.canDownload) {
+				return
+			}
+			event.preventDefault()
+		},
+
 		async beforeOpen() {
 			// initial loading start
 			this.initiated = true
@@ -643,7 +637,7 @@ export default defineComponent({
 
 			// swap title with original one
 			const title = document.getElementsByTagName('head')[0].getElementsByTagName('title')[0]
-			if (title && !title.dataset.old) {
+			if (title && !title.dataset.old && fileName !== '') {
 				title.dataset.old = document.title
 				this.updateTitle(fileName)
 			}
@@ -713,6 +707,10 @@ export default defineComponent({
 			this.lightBackdrop = handler.theme === 'light' || (handler.theme === 'default' && defaultThemeIsLight)
 			this.handlerId = handler.id
 
+			this.currentFile = new File(fileInfo, mime, handler.component)
+			this.comparisonFile = null
+			this.updatePreviousNext()
+
 			// fallback to default viewer group if enabled
 			const groupFallback = configModule.alwaysShowViewer ? this.mimeGroups[configModule.defaultMimeType] : undefined
 			// check if part of a group, if so retrieve full files list
@@ -733,6 +731,10 @@ export default defineComponent({
 				const { request: folderRequest, cancel: cancelRequestFolder } = cancelableRequest(getFileList)
 				this.cancelRequestFolder = cancelRequestFolder
 				const [dirPath] = extractFilePaths(fileInfo.filename)
+
+				this.currentIndex = 0
+				this.fileList = [fileInfo]
+
 				const fileList = await folderRequest(dirPath)
 
 				let filteredFiles
@@ -759,18 +761,11 @@ export default defineComponent({
 
 				// store current position
 				this.currentIndex = this.fileList.findIndex(file => file.filename === fileInfo.filename)
+				this.updatePreviousNext()
 			} else {
 				this.currentIndex = 0
 				this.fileList = [fileInfo]
 			}
-
-			// get saved fileInfo
-			fileInfo = this.currentIndex !== -1 ? this.fileList[this.currentIndex] : fileInfo
-
-			// show file
-			this.currentFile = new File(fileInfo, mime, handler.component)
-			this.comparisonFile = null
-			this.updatePreviousNext()
 
 			// if sidebar was opened before, let's update the file
 			this.changeSidebar()
@@ -836,12 +831,12 @@ export default defineComponent({
 		},
 
 		/**
-		 * Registering possible new handers
+		 * Registering possible new handlers
 		 *
 		 * @param {object} handler the handler to register
 		 * @param {string} handler.id unique handler identifier
 		 * @param {Array} handler.mimes list of valid mimes compatible with the handler
-		 * @param {object} handler.component a vuejs component to render when a file matching the mime list is opened
+		 * @param {object} handler.component a VueJs component to render when a file matching the mime list is opened
 		 * @param {string} [handler.group] a group name to be associated with for the slideshow
 		 */
 		registerHandler(handler) {
@@ -886,8 +881,6 @@ export default defineComponent({
 						return
 					}
 
-					// register file action and groups
-					this.registerLegacyAction({ mime, group: handler.group })
 					// register groups
 					this.registerGroups({ mime, group: handler.group })
 
@@ -925,8 +918,6 @@ export default defineComponent({
 						return
 					}
 
-					// register file action and groups if the request alias had a group
-					this.registerLegacyAction({ mime, group: this.mimeGroups[alias] })
 					// register groups if the request alias had a group
 					this.registerGroups({ mime, group: this.mimeGroups[alias] })
 
@@ -939,32 +930,6 @@ export default defineComponent({
 			}
 		},
 
-		registerLegacyAction({ mime, group }) {
-			if (!this.isStandalone && OCA?.Files?.fileActions) {
-				// unregistered handler, let's go!
-				OCA.Files.fileActions.registerAction({
-					name: 'view',
-					displayName: t('viewer', 'View'),
-					iconClass: 'icon-viewer',
-					mime,
-					permissions: OC.PERMISSION_READ,
-					actionHandler: legacyFilesActionHandler,
-				})
-				OCA.Files.fileActions.setDefault(mime, 'view')
-				logger.debug('Legacy file action registered for mime ' + mime, { mime, group })
-			}
-
-			// register groups
-			if (group) {
-				this.mimeGroups[mime] = group
-				// init if undefined
-				if (!this.mimeGroups[group]) {
-					this.mimeGroups[group] = []
-				}
-				this.mimeGroups[group].push(mime)
-			}
-		},
-
 		registerGroups({ mime, group }) {
 			if (group) {
 				this.mimeGroups[mime] = group
@@ -973,31 +938,6 @@ export default defineComponent({
 					this.mimeGroups[group] = []
 				}
 				this.mimeGroups[group].push(mime)
-			}
-		},
-
-		registerFileActions() {
-			if (!this.isStandalone) {
-				registerFileAction(new FileAction({
-					id: 'view',
-					displayName() {
-						return t('viewer', 'View')
-					},
-					iconSvgInline: () => EyeSvg,
-					default: DefaultType.DEFAULT,
-					enabled: (nodes) => {
-						// Disable if not located in user root
-						if (nodes.some(node => !(node.isDavRessource && node.root?.startsWith('/files')))) {
-							return false
-						}
-						// Faster to check if at least one node doesn't match the requirements
-						return !nodes.some(node => (
-							(node.permissions & Permission.READ) === 0
-							|| !this.Viewer.mimetypes.includes(node.mime)
-						))
-					},
-					exec: filesActionHandler,
-				}))
 			}
 		},
 
