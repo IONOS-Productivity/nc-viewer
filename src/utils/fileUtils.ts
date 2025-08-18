@@ -124,6 +124,11 @@ export function genFileInfo(obj: FileStat): FileInfo {
 			} else if (data === 'true') {
 				fileInfo[camelcase(key)] = true
 			} else {
+				// preserve numeric names for filename and basename as string
+				if (key === 'filename' || key === 'basename') {
+					fileInfo[camelcase(key)] = data
+					return
+				}
 				fileInfo[camelcase(key)] = isNumber(data)
 					? Number(data)
 					: data
