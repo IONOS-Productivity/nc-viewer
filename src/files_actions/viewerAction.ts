@@ -10,6 +10,7 @@ import { emit } from '@nextcloud/event-bus'
 import { t } from '@nextcloud/l10n'
 import svgEye from '@mdi/svg/svg/eye.svg?raw'
 
+import configModule from '../models/config.ts'
 import logger from '../services/logger.js'
 
 /**
@@ -104,6 +105,12 @@ export function registerViewerAction() {
 			// Disable if not located in user root
 			if (nodes.some(node => !(node.isDavResource && node.root?.startsWith('/files')))) {
 				return false
+			}
+
+			// Always enabled if configured so
+			if (configModule.alwaysShowViewer) {
+				// disable for folders
+				return !nodes.some(node => node.type === 'folder')
 			}
 
 			return nodes.every((node) =>
