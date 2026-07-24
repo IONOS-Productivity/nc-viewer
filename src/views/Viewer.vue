@@ -44,7 +44,7 @@
 		:inline-actions="canEdit ? 1 : 0"
 		:spread-navigation="true"
 		:style="{ width: isSidebarShown ? `${sidebarPosition}px` : null }"
-		:name="currentFile.basename"
+		:name="modalTitle"
 		class="viewer"
 		size="full"
 		@close="close"
@@ -389,6 +389,14 @@ export default defineComponent({
 				'theme--default': this.theme === 'default',
 				'image--fullscreen': this.isImage && this.isFullscreenMode,
 			}
+		},
+
+		modalTitle() {
+			if (!configModule.alwaysShowViewer) {
+				return this.currentFile.basename
+			}
+
+			return this.currentFile?.modal?.name === 'Default' ? '' : this.currentFile.basename
 		},
 
 		showComparison() {
@@ -1334,6 +1342,14 @@ export default defineComponent({
 			background-color: transparent;
 			box-shadow: none;
 		}
+	}
+
+	// The header actions (play/pause, actions menu, close) are normally pushed
+	// to the right by the full-width `.modal-header__name` element. When the
+	// modal name is empty (Default handler / always-show-viewer), NcModal omits
+	// that element, so keep the menu right-aligned explicitly.
+	:deep(.modal-header .icons-menu) {
+		margin-inline-start: auto;
 	}
 
 	&__content {
