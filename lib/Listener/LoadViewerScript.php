@@ -11,6 +11,7 @@ namespace OCA\Viewer\Listener;
 use OCA\Files\Event\LoadAdditionalScriptsEvent;
 use OCA\Viewer\AppInfo\Application;
 use OCA\Viewer\Event\LoadViewer;
+use OCP\AppFramework\Services\IAppConfig;
 use OCP\AppFramework\Services\IInitialState;
 use OCP\EventDispatcher\Event;
 use OCP\EventDispatcher\IEventListener;
@@ -28,6 +29,7 @@ class LoadViewerScript implements IEventListener {
 	public function __construct(
 		IInitialState $initialStateService,
 		IPreview $previewManager,
+		private readonly IAppConfig $appConfig,
 	) {
 		$this->initialStateService = $initialStateService;
 		$this->previewManager = $previewManager;
@@ -39,9 +41,13 @@ class LoadViewerScript implements IEventListener {
 		}
 
 		Util::addStyle(Application::APP_ID, 'viewer-init');
+
+		$alwaysShowViewer = $this->appConfig->getAppValue('always_show_viewer', 'no') === 'yes';
+
 		Util::addStyle(Application::APP_ID, 'viewer-main');
 		Util::addInitScript(Application::APP_ID, 'viewer-init');
 		Util::addScript(Application::APP_ID, 'viewer-main', 'files');
 		$this->initialStateService->provideInitialState('enabled_preview_providers', array_keys($this->previewManager->getProviders()));
+		$this->initialStateService->provideInitialState('always_show_viewer', $alwaysShowViewer);
 	}
 }

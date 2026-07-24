@@ -192,6 +192,7 @@ import { canDownload } from '../utils/canDownload.ts'
 import { extractFilePaths, extractFilePathFromSource } from '../utils/fileUtils.ts'
 import { toggleEditor } from '../files_actions/viewerAction.ts'
 import cancelableRequest from '../utils/CancelableRequest.js'
+import configModule from '../models/config.ts'
 import Error from '../components/Error.vue'
 import fetchNode from '../services/FetchFile.ts'
 import File from '../models/file.js'
@@ -728,6 +729,11 @@ export default defineComponent({
 				handler = this.registeredHandlers[mime] ?? this.registeredHandlers[alias]
 			}
 
+			// fallback to default viewer if enabled
+			if (!handler && configModule.alwaysShowViewer) {
+				handler = this.registeredHandlers[configModule.defaultMimeType]
+			}
+
 			// if we don't have a handler for this mime, abort
 			if (!handler) {
 				logger.error('The following file could not be displayed', { fileInfo })
@@ -745,8 +751,10 @@ export default defineComponent({
 			this.comparisonFile = null
 			this.updatePreviousNext()
 
+			// fallback to default viewer group if enabled
+			const groupFallback = configModule.alwaysShowViewer ? this.mimeGroups[configModule.defaultMimeType] : undefined
 			// check if part of a group, if so retrieve full files list
-			const group = this.mimeGroups[mime]
+			const group = this.mimeGroups[mime] ?? groupFallback
 			if (this.files && this.files.length > 0) {
 				logger.debug('A files list have been provided. No folder content will be fetched.')
 				// we won't sort files here, let's use the order the array has
@@ -814,7 +822,7 @@ export default defineComponent({
 		openFileFromList(fileInfo) {
 			// override mimetype if existing alias
 			const mime = fileInfo.mime
-			this.currentFile = new File(fileInfo, mime, this.components[mime])
+			this.currentFile = new File(fileInfo, mime, this.components[mime] || this.components[configModule.defaultMimeType])
 			this.changeSidebar()
 			this.updatePreviousNext()
 		},
