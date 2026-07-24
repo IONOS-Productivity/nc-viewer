@@ -785,8 +785,14 @@ export default defineComponent({
 
 				const fileList = await folderRequest(dirPath)
 
-				// filter out the unwanted mimes
-				const filteredFiles = fileList.filter(file => file.mime && mimes.indexOf(file.mime) !== -1)
+				let filteredFiles
+				if (configModule.alwaysShowViewer) {
+					// only include files with mime to exclude directories, otherwise accept all mimes
+					filteredFiles = fileList.filter(file => file?.mime)
+				} else {
+					// filter out the unwanted mimes
+					filteredFiles = fileList.filter(file => file.mime && mimes.indexOf(file.mime) !== -1)
+				}
 
 				// sort like the files list
 				// TODO: implement global sorting API
