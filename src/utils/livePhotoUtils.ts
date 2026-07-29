@@ -26,6 +26,6 @@ export function findLivePhotoPeerFromName(referenceFile: BasicFileInfo, fileList
 	return fileList.find(comparedFile => {
 		// if same filename and extension is allowed
 		return comparedFile.filename !== referenceFile.filename
-				&& (comparedFile.basename.startsWith(referenceFile.name) && livePictureExtRegex.test(comparedFile.basename))
+			&& (comparedFile.basename.toString().startsWith(referenceFile.name) && livePictureExtRegex.test(comparedFile.basename))
 	})
 }

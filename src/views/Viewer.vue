@@ -44,7 +44,7 @@
 		:inline-actions="canEdit ? 1 : 0"
 		:spread-navigation="true"
 		:style="{ width: isSidebarShown ? `${sidebarPosition}px` : null }"
-		:name="currentFile.basename"
+		:name="modalTitle"
 		class="viewer"
 		size="full"
 		@close="close"
@@ -192,6 +192,7 @@ import { canDownload } from '../utils/canDownload.ts'
 import { extractFilePaths, extractFilePathFromSource } from '../utils/fileUtils.ts'
 import { toggleEditor } from '../files_actions/viewerAction.ts'
 import cancelableRequest from '../utils/CancelableRequest.js'
+import configModule from '../models/config.ts'
 import Error from '../components/Error.vue'
 import fetchNode from '../services/FetchFile.ts'
 import File from '../models/file.js'
@@ -388,6 +389,14 @@ export default defineComponent({
 				'theme--default': this.theme === 'default',
 				'image--fullscreen': this.isImage && this.isFullscreenMode,
 			}
+		},
+
+		modalTitle() {
+			if (!configModule.alwaysShowViewer) {
+				return this.currentFile.basename
+			}
+
+			return this.currentFile?.modal?.name === 'Default' ? '' : this.currentFile.basename
 		},
 
 		showComparison() {
@@ -728,6 +737,11 @@ export default defineComponent({
 				handler = this.registeredHandlers[mime] ?? this.registeredHandlers[alias]
 			}
 
+			// fallback to default viewer if enabled
+			if (!handler && configModule.alwaysShowViewer) {
+				handler = this.registeredHandlers[configModule.defaultMimeType]
+			}
+
 			// if we don't have a handler for this mime, abort
 			if (!handler) {
 				logger.error('The following file could not be displayed', { fileInfo })
@@ -745,8 +759,10 @@ export default defineComponent({
 			this.comparisonFile = null
 			this.updatePreviousNext()
 
+			// fallback to default viewer group if enabled
+			const groupFallback = configModule.alwaysShowViewer ? this.mimeGroups[configModule.defaultMimeType] : undefined
 			// check if part of a group, if so retrieve full files list
-			const group = this.mimeGroups[mime]
+			const group = this.mimeGroups[mime] ?? groupFallback
 			if (this.files && this.files.length > 0) {
 				logger.debug('A files list have been provided. No folder content will be fetched.')
 				// we won't sort files here, let's use the order the array has
@@ -769,8 +785,22 @@ export default defineComponent({
 
 				const fileList = await folderRequest(dirPath)
 
-				// filter out the unwanted mimes
-				const filteredFiles = fileList.filter(file => file.mime && mimes.indexOf(file.mime) !== -1)
+				let filteredFiles
+				if (configModule.alwaysShowViewer) {
+					// only include files with mime to exclude directories
+					// and office documents/pdfs to exclude collabora files
+					// otherwise accept all mimes
+					filteredFiles = fileList.filter(file => {
+						const mime = file?.mime
+						const isOfficeDocument = mime && OC.MimeTypeList.aliases[mime]?.startsWith('x-office')
+						const isPdf = mime && mime === 'application/pdf'
+
+						return mime && !isOfficeDocument && !isPdf
+					})
+				} else {
+					// filter out the unwanted mimes
+					filteredFiles = fileList.filter(file => file.mime && mimes.indexOf(file.mime) !== -1)
+				}
 
 				// sort like the files list
 				// TODO: implement global sorting API
@@ -814,7 +844,7 @@ export default defineComponent({
 		openFileFromList(fileInfo) {
 			// override mimetype if existing alias
 			const mime = fileInfo.mime
-			this.currentFile = new File(fileInfo, mime, this.components[mime])
+			this.currentFile = new File(fileInfo, mime, this.components[mime] || this.components[configModule.defaultMimeType])
 			this.changeSidebar()
 			this.updatePreviousNext()
 		},
@@ -1326,6 +1356,14 @@ export default defineComponent({
 			background-color: transparent;
 			box-shadow: none;
 		}
+	}
+
+	// The header actions (play/pause, actions menu, close) are normally pushed
+	// to the right by the full-width `.modal-header__name` element. When the
+	// modal name is empty (Default handler / always-show-viewer), NcModal omits
+	// that element, so keep the menu right-aligned explicitly.
+	:deep(.modal-header .icons-menu) {
+		margin-inline-start: auto;
 	}
 
 	&__content {
