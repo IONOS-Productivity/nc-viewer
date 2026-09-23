@@ -75,6 +75,11 @@ export default {
 			type: Boolean,
 			default: false,
 		},
+		// left-edge position of the sidebar (px), set before isSidebarShown flips
+		sidebarPosition: {
+			type: Number,
+			default: 0,
+		},
 		// are we in fullscreen mode ?
 		isFullScreen: {
 			type: Boolean,
@@ -121,8 +126,7 @@ export default {
 		},
 		// update image size on sidebar toggle
 		isSidebarShown() {
-			// wait for transition to complete (100ms)
-			setTimeout(this.updateHeightWidth, 200)
+			this.updateHeightWidth()
 		},
 	},
 
@@ -162,7 +166,9 @@ export default {
 				const modalContainer = modalWrapper.querySelector('.modal-container')
 
 				const parentHeight = modalContainer.clientHeight
-				const parentWidth = modalContainer.clientWidth
+				const parentWidth = (this.isSidebarShown && this.sidebarPosition > 0)
+					? this.sidebarPosition
+					: modalContainer.clientWidth
 
 				const heightRatio = parentHeight / this.naturalHeight
 				const widthRatio = parentWidth / this.naturalWidth
