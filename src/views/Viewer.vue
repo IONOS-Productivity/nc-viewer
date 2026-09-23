@@ -110,6 +110,7 @@
 					:editing="false"
 					:is-full-screen="isFullscreen"
 					:is-sidebar-shown="isSidebarShown"
+					:sidebar-position="sidebarPosition"
 					:loaded.sync="comparisonFile.loaded"
 					class="viewer__file viewer__file--active"
 					@error="comparisonFailed" />
@@ -145,6 +146,7 @@
 					:file-list="fileList"
 					:is-full-screen="isFullscreen"
 					:is-sidebar-shown="isSidebarShown"
+					:sidebar-position="sidebarPosition"
 					:loaded.sync="currentFile.loaded"
 					class="viewer__file viewer__file--active"
 					@update:editing="toggleEditor"
@@ -1117,12 +1119,12 @@ export default defineComponent({
 		},
 
 		handleAppSidebarOpen() {
-			this.isSidebarShown = true
 			const sidebar = document.querySelector('aside.app-sidebar')
 			if (sidebar) {
 				this.sidebarPosition = sidebar.getBoundingClientRect().left
 				this.trapElements = [sidebar]
 			}
+			this.isSidebarShown = true
 		},
 
 		handleAppSidebarClose() {
